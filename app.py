@@ -115,6 +115,24 @@ def mutate(action):
         v.update(name=str(x.get("name") or "Savings Goal"),targetAmount=a,savedAmount=0,targetDate=str(x.get("targetDate") or ""),createdAt=now())
     arr.append(v); save_db(d)
     return out(True,{"income":"Income added successfully.","expense":"Expense added successfully.","account":"Bank account added successfully.","payment":"AutoPay added successfully.","goal":"Savings goal created."}[sing],**{sing:v})
+@app.get("/api/bank/status")
+def bank_status():
+    configured = bool(os.environ.get("AA_BASE_URL") and os.environ.get("AA_CLIENT_ID") and os.environ.get("AA_CLIENT_SECRET"))
+    return jsonify(success=True, status="online", providerConfigured=configured,
+                   message="Account Aggregator provider configured." if configured else "Provider credentials are not configured.")
+
+@app.post("/api/bank/connect")
+def bank_connect():
+    x = request.get_json(silent=True) or {}
+    mobile = "".join(ch for ch in str(x.get("mobile", "")) if ch.isdigit())[-10:]
+    if len(mobile) != 10 or mobile[0] not in "6789":
+        return out(False, "Enter a valid 10-digit Indian mobile number.", 400)
+    if not (os.environ.get("AA_BASE_URL") and os.environ.get("AA_CLIENT_ID") and os.environ.get("AA_CLIENT_SECRET")):
+        return out(False, "An authorized Account Aggregator provider is not configured. Add provider credentials and provider-specific consent callback settings in Render.", 503)
+    # Implement the selected provider's consent-initiation and callback contract here.
+    # Never collect bank passwords, OTPs, CVVs, or UPI PINs in MoneyFlow.
+    return out(False, "Provider credentials are present, but the provider-specific consent API and callback must be configured before live connection.", 501)
+
 @app.get("/api/admin")
 def admin_data():
     d=load_db()
