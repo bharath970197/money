@@ -57,6 +57,7 @@ def register():
 def login():
     x=request.get_json(silent=True) or {}; email=str(x.get("email","")).strip().lower(); password=str(x.get("password",""))
     if email=="admin@expense.local" and password=="admin123":
+        session["moneyflow_admin"] = True
         return out(True,"Login successful.",user={"id":"moneyflow-demo-admin","name":"Admin","email":email,"phone":"","upiId":"","createdAt":"","role":"admin"})
     d=load_db(); u=next((u for u in d["users"] if u.get("email","").lower()==email),None)
     if not u: return out(False,"Account not found.")
