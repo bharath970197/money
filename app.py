@@ -6,7 +6,7 @@ import os, json, uuid, hashlib, hmac, tempfile
 BASE=Path(__file__).resolve().parent
 FRONTEND=BASE/"src"
 DB_FILE=Path(os.environ.get("MONEYFLOW_DATA_FILE",str(BASE/"expense-database.json")))
-DEFAULT={"users":[],"incomes":[],"expenses":[],"bankAccounts":[],"autopay":[],"goals":[]}
+DEFAULT={"users":[],"incomes":[],"expenses":[],"bankAccounts":[],"autopay":[],"autopayPayments":[],"goals":[]}
 app=Flask(__name__,static_folder=None)
 app.secret_key=os.environ.get("MONEYFLOW_SESSION_SECRET") or os.urandom(32)
 
@@ -15,7 +15,7 @@ def load_db():
     if not DB_FILE.exists(): return {k:[] for k in DEFAULT}
     try:
         d=json.loads(DB_FILE.read_text(encoding="utf-8-sig"))
-        return {"users":d.get("users",[]),"incomes":d.get("incomes",d.get("income",[])),"expenses":d.get("expenses",[]),"bankAccounts":d.get("bankAccounts",[]),"autopay":d.get("autopay",[]),"goals":d.get("goals",[])}
+        return {"users":d.get("users",[]),"incomes":d.get("incomes",d.get("income",[])),"expenses":d.get("expenses",[]),"bankAccounts":d.get("bankAccounts",[]),"autopay":d.get("autopay",[]),"autopayPayments":d.get("autopayPayments",[]),"goals":d.get("goals",[])}
     except (OSError,json.JSONDecodeError):
         app.logger.exception("Database read failed"); return {k:[] for k in DEFAULT}
 def save_db(d):
@@ -68,11 +68,21 @@ def get_user_data(uid):
     d=load_db(); u=user_for(d,uid)
     if not u: return out(False,"User not found.",404)
     result={"success":True,"user":clean(u)}
-    for k in ("incomes","expenses","bankAccounts","autopay","goals"): result[k]=[v for v in d[k] if str(v.get("userId"))==str(uid)]
+    for k in ("incomes","expenses","bankAccounts","autopay","autopayPayments","goals"): result[k]=[v for v in d[k] if str(v.get("userId"))==str(uid)]
     result["bankTransactions"]=[]; return jsonify(result)
 @app.post("/api/<action>")
 def mutate(action):
     x=request.get_json(silent=True) or {}; d=load_db(); uid=str(x.get("userId","")); u=user_for(d,uid)
+    if action=="record-autopay-payment":
+        if not u: return out(False,"User not found.")
+        ident=str(x.get("id","")); payment=next((v for v in d["autopay"] if str(v.get("id"))==ident and str(v.get("userId"))==uid),None)
+        if not payment: return out(False,"AutoPay schedule not found.")
+        amount=valid_amount(x.get("amount",payment.get("amount")))
+        if amount is None: return out(False,"Enter a valid payment amount.")
+        method=str(x.get("paymentMethod") or payment.get("paymentMethod") or "UPI")
+        record={"id":str(uuid.uuid4()),"userId":uid,"autopayId":ident,"name":payment.get("name","AutoPay"),"amount":amount,"paymentMethod":method,"status":"recorded","date":now(),"note":str(x.get("note") or "Manually confirmed by user; no bank debit initiated.")}
+        d["autopayPayments"].append(record); payment["lastPaidAt"]=record["date"]; payment["lastPaidAmount"]=amount
+        save_db(d); return out(True,"AutoPay payment record saved. No money was debited.",paymentRecord=record)
     if action=="update-upi":
         if not u: return out(False,"User not found.")
         u["upiId"]=str(x.get("upiId","")).strip(); save_db(d); return out(True,"UPI ID updated successfully.")
@@ -145,5 +155,5 @@ def admin_data():
     if not session.get("moneyflow_admin"):
         return out(False, "Administrator access required.", 403)
     d=load_db()
-    return jsonify(users=[clean(u) for u in d["users"]],expenses=d["expenses"],income=d["incomes"],bankAccounts=d["bankAccounts"])
+    return jsonify(users=[clean(u) for u in d["users"]],expenses=d["expenses"],income=d["incomes"],bankAccounts=d["bankAccounts"],autopay=d["autopay"],autopayPayments=d["autopayPayments"])
 if __name__=="__main__": app.run(host="0.0.0.0",port=int(os.environ.get("PORT",5000)),debug=False)
