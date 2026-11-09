@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: moneyflow
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: MONEYFLOW_DATA_FILE
+        value: /var/data/expense-database.json
+    disk:
+      name: moneyflow-data
+      mountPath: /var/data
+      sizeGB: 1
