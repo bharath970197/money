@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, redirect
+from flask import Flask, request, jsonify, send_from_directory, redirect, session
 from pathlib import Path
 from datetime import datetime, timezone
 import os, json, uuid, hashlib, hmac, tempfile
@@ -8,6 +8,7 @@ FRONTEND=BASE/"src"
 DB_FILE=Path(os.environ.get("MONEYFLOW_DATA_FILE",str(BASE/"expense-database.json")))
 DEFAULT={"users":[],"incomes":[],"expenses":[],"bankAccounts":[],"autopay":[],"goals":[]}
 app=Flask(__name__,static_folder=None)
+app.secret_key=os.environ.get("MONEYFLOW_SESSION_SECRET") or os.urandom(32)
 
 def now(): return datetime.now(timezone.utc).isoformat()
 def load_db():
@@ -135,6 +136,8 @@ def bank_connect():
 
 @app.get("/api/admin")
 def admin_data():
+    if not session.get("moneyflow_admin"):
+        return out(False, "Administrator access required.", 403)
     d=load_db()
     return jsonify(users=[clean(u) for u in d["users"]],expenses=d["expenses"],income=d["incomes"],bankAccounts=d["bankAccounts"])
 if __name__=="__main__": app.run(host="0.0.0.0",port=int(os.environ.get("PORT",5000)),debug=False)
