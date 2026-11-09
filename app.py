@@ -135,6 +135,11 @@ def bank_connect():
     # Never collect bank passwords, OTPs, CVVs, or UPI PINs in MoneyFlow.
     return out(False, "Provider credentials are present, but the provider-specific consent API and callback must be configured before live connection.", 501)
 
+@app.post("/api/logout")
+def logout_api():
+    session.clear()
+    return out(True, "Signed out.")
+
 @app.get("/api/admin")
 def admin_data():
     if not session.get("moneyflow_admin"):
