@@ -9,10 +9,21 @@ Get-ChildItem -LiteralPath $ProjectRoot -Force | Where-Object { $_.Name -ne ".gi
     Copy-Item -LiteralPath $_.FullName -Destination $ClonePath -Recurse -Force
 }
 Set-Location $ClonePath
+if (-not (git config user.name)) {
+    $GitName = Read-Host "Enter your Git commit name"
+    git config --global user.name $GitName
+}
+if (-not (git config user.email)) {
+    $GitEmail = Read-Host "Enter your Git commit email"
+    git config --global user.email $GitEmail
+}
 git add -A
 if ($LASTEXITCODE -ne 0) { throw "git add failed." }
-git commit -m "Upload complete MoneyFlow Python project"
-if ($LASTEXITCODE -ne 0) { Write-Host "No new changes to commit; attempting push." }
+git diff --cached --quiet
+if ($LASTEXITCODE -eq 1) {
+    git commit -m "Upload complete MoneyFlow Python project"
+    if ($LASTEXITCODE -ne 0) { throw "git commit failed. Check the Git identity shown above." }
+}
 git push origin main
 if ($LASTEXITCODE -ne 0) { throw "git push failed. Sign in to GitHub and run this script again." }
 Write-Host "Success: complete MoneyFlow project pushed to https://github.com/bharath970197/money"
